@@ -1,0 +1,36 @@
+name: 資料斷線檢查
+# 每天台灣時間早上 9 點檢查一次；超過 24 小時沒有新資料就讓這個工作失敗，
+# GitHub 會寄信通知倉庫擁有者。也可以到 Actions 分頁手動按 Run workflow 測試。
+on:
+  schedule:
+    - cron: '0 1 * * *'      # 01:00 UTC = 09:00 台灣時間
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 檢查最後發布時間
+        run: |
+          if [ ! -f published_at.txt ]; then
+            echo "找不到 published_at.txt —— 監測電腦可能從來沒有發布成功過。"
+            exit 1
+          fi
+          LAST=$(cat published_at.txt | head -1)
+          echo "最後發布時間（台灣時間）：$LAST"
+          LAST_EPOCH=$(date -d "$LAST +08:00" +%s 2>/dev/null || echo 0)
+          if [ "$LAST_EPOCH" = "0" ]; then
+            echo "published_at.txt 格式看不懂：$LAST"
+            exit 1
+          fi
+          NOW=$(date +%s)
+          HOURS=$(( (NOW - LAST_EPOCH) / 3600 ))
+          echo "距離現在 $HOURS 小時"
+          if [ "$HOURS" -gt 24 ]; then
+            echo "::error::大橋車流監測已經 $HOURS 小時沒有新資料了。"
+            echo "請檢查學校那台監測電腦：是不是關機、被登出，或程式沒起來。"
+            echo "官方 API 沒有歷史回補，斷掉的時段補不回來。"
+            exit 1
+          fi
+          echo "正常。"
